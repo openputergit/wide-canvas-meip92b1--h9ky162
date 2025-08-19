@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neubrutalism Quiz Creator & Battleship</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .neu-brutal {
+            border: 3px solid #000;
+            box-shadow: 5px 5px 0px #000;
+            transition: all 0.2s ease;
+        }
+        .neu-brutal:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 7px 7px 0px #000;
+        }
+        .loading {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        }
+        .board-cell {
+            width: 40px;
+            height: 40px;
+            border: 2px solid #000;
+            cursor: pointer;
+        }
+        @media (max-width: 768px) {
+            .board-cell {
+                width: 30px;
+                height: 30px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-[#FFE5E5] min-h-screen p-4">
+    <div id="loading" class="loading">
+        <div class="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-black"></div>
+    </div>
+
+    <div class="max-w-6xl mx-auto">
+        <div class="flex flex-col md:flex-row gap-8">
+            <!-- Quiz Section -->
+            <div class="w-full md:w-1/2 p-6 bg-[#95F9E3] neu-brutal rounded-lg">
+                <h2 class="text-2xl font-bold mb-4">Quiz Creator</h2>
+                <form id="quizForm" class="space-y-4">
+                    <div>
+                        <input type="text" id="question" placeholder="Enter your question" class="w-full p-2 neu-brutal">
+                        <div id="options" class="space-y-2 mt-2">
+                            <input type="text" placeholder="Option 1" class="w-full p-2 neu-brutal">
+                            <input type="text" placeholder="Option 2" class="w-full p-2 neu-brutal">
+                        </div>
+                        <input type="text" id="correctAnswer" placeholder="Correct Answer" class="w-full p-2 mt-2 neu-brutal">
+                        <button type="submit" class="mt-4 bg-[#FFC900] neu-brutal px-6 py-2">Add Question</button>
+                    </div>
+                </form>
+                <div id="quizList" class="mt-8"></div>
+            </div>
+
+            <!-- Battleship Section -->
+            <div class="w-full md:w-1/2 p-6 bg-[#B4FF9F] neu-brutal rounded-lg">
+                <h2 class="text-2xl font-bold mb-4">Battleship Game</h2>
+                <div class="flex flex-col items-center">
+                    <div id="gameBoard" class="grid grid-cols-10 gap-1 mb-4"></div>
+                    <button id="startGame" class="bg-[#FFC900] neu-brutal px-6 py-2">Start New Game</button>
+                    <p id="score" class="mt-4 text-xl font-bold">Score: 0</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Quiz functionality
+        let quizzes = [];
+        const userId = localStorage.getItem('userId') || 'user_' + Date.now();
+        localStorage.setItem('userId', userId);
+
+        document.getElementById('quizForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const question = document.getElementById('question').value;
+            const options = Array.from(document.querySelectorAll('#options input')).map(input => input.value);
+            const correctAnswer = document.getElementById('correctAnswer').value;
+
+            const quizData = {
+                question,
+                options,
+                correctAnswer
+            };
+
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/db', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer YmQiIIk4roMDU3K7CM4m6W7Bylt1',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId,
+                        appSlug: 'quiz-app',
+                        action: 'create',
+                        table: 'quizzes',
+                        data: quizData
+                    })
+                });
+
+                const result = await response.json();
+                if (!result.error) {
+                    quizzes.push(quizData);
+                    updateQuizList();
+                    e.target.reset();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
+
+        function updateQuizList() {
+            const quizList = document.getElementById('quizList');
+            quizList.innerHTML = quizzes.map((quiz, index) => `
+                <div class="bg-white neu-brutal p-4 mb-4">
+                    <h3 class="font-bold">${quiz.question}</h3>
+                    <ul class="list-disc ml-4">
+                        ${quiz.options.map(option => `<li>${option}</li>`).join('')}
+                    </ul>
+                    <p class="mt-2"><strong>Answer:</strong> ${quiz.correctAnswer}</p>
+                </div>
+            `).join('');
+        }
+
+        // Battleship functionality
+        const boardSize = 10;
+        let ships = [];
+        let score = 0;
+
+        function initializeBoard() {
+            const gameBoard = document.getElementById('gameBoard');
+            gameBoard.innerHTML = '';
+            for (let i = 0; i < boardSize * boardSize; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'board-cell bg-white';
+                cell.dataset.index = i;
+                cell.addEventListener('click', handleCellClick);
+                gameBoard.appendChild(cell);
+            }
+        }
+
+        function placeShips() {
+            ships = [];
+            for (let i = 0; i < 5; i++) {
+                let position;
+                do {
+                    position = Math.floor(Math.random() * (boardSize * boardSize));
+                } while (ships.includes(position));
+                ships.push(position);
+            }
+        }
+
+        function handleCellClick(e) {
+            const index = parseInt(e.target.dataset.index);
+            if (ships.includes(index)) {
+                e.target.style.backgroundColor = '#FF6B6B';
+                score += 100;
+            } else {
+                e.target.style.backgroundColor = '#A0A0A0';
+                score -= 10;
+            }
+            document.getElementById('score').textContent = `Score: ${score}`;
+            e.target.removeEventListener('click', handleCellClick);
+        }
+
+        document.getElementById('startGame').addEventListener('click', () => {
+            score = 0;
+            document.getElementById('score').textContent = 'Score: 0';
+            initializeBoard();
+            placeShips();
+        });
+
+        // Initialize the game
+        initializeBoard();
+        placeShips();
+
+        // Load existing quizzes
+        async function loadQuizzes() {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/db', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer YmQiIIk4roMDU3K7CM4m6W7Bylt1',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId,
+                        appSlug: 'quiz-app',
+                        action: 'read',
+                        table: 'quizzes'
+                    })
+                });
+
+                const result = await response.json();
+                if (!result.error && result.data) {
+                    quizzes = result.data.map(item => item.data);
+                    updateQuizList();
+                }
+            } catch (error) {
+                console.error('Error loading quizzes:', error);
+            }
+        }
+
+        loadQuizzes();
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
